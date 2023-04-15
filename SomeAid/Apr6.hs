@@ -19,7 +19,7 @@ class MonadTrans t where
 -- use the monad WITHOUT combining another monad.. See
 -- StateT for an example
 ----------------------
-data Identity a = Identity a 
+data Identity a = Identity a
 
 -- | runIdentity
 -- This will take a value outside of the identity..
@@ -59,7 +59,7 @@ data StateT s m a = StateT (s -> m (a, s))
 -- the (StateT s m a) with the given state s, and output
 -- m (s, a) where m is the inner monad.
 runStateT :: Monad m => StateT s m a -> s -> m (a,s)
-runStateT (StateT f) s = f s 
+runStateT (StateT f) s = f s
 
 -- | evalStateT
 -- Similar to runStateT, but only returns the output value
@@ -71,7 +71,7 @@ evalStateT st = fmap fst . runStateT st
 execStateT :: Monad m => StateT s m a -> s -> m s
 execStateT st = fmap snd . runStateT st
 
--- | put 
+-- | put
 -- Given a new state ``s", this function will
 -- set the state to be ``s" for all computations
 -- after this call.
@@ -99,13 +99,13 @@ gets f = StateT (\s -> return (f s, s))
 
 -- | modify
 -- Given a function ``f :: s -> s", this will
--- apply ``f" to the current state, and modify 
+-- apply ``f" to the current state, and modify
 -- the state for the computations after this call.
 modify :: Monad m => (s -> s) -> StateT s m ()
 modify f = StateT (\s -> return ((), f s))
 
 -- | This is a type alias for the StateT monad
--- to give us the original state monad that 
+-- to give us the original state monad that
 -- is NOT combined with any other monad.
 type State s a = StateT s Identity a
 
@@ -134,11 +134,11 @@ instance Monad m => Functor (StateT s m) where
 -- Applicative instance (don't worry about this too much)
 -- didn't go through this in class
 instance Monad m => Applicative (StateT s m) where
-    pure a = StateT $ \s -> pure (a,s) 
+    pure a = StateT $ \s -> pure (a,s)
 
     StateT f <*> StateT a = StateT $ \s -> do
         (f', s') <- f s
-        (a', s'') <- a s' 
+        (a', s'') <- a s'
         pure (f' a', s'')
 
 
@@ -147,8 +147,8 @@ instance Monad m => Monad (StateT s m) where
     return = pure
     -- (>>=) :: (StateT s m) a -> (a -> (StateT s m) b) -> (StateT s m) b
     StateT f >>= g = StateT (\s -> do
-            (a, s')  <- f s 
-            let StateT f' = g a 
+            (a, s')  <- f s
+            let StateT f' = g a
             (b, s'') <- f' s'
             return (b, s'')
         )
@@ -156,7 +156,7 @@ instance Monad m => Monad (StateT s m) where
 -- This instance tells us how to take ANY monad and LIFT it up to the
 -- StateT monad.. In other words, this tell us how to combine any monad
 -- with the StateT monad..
-instance MonadTrans (StateT s) where 
+instance MonadTrans (StateT s) where
     -- lift :: m a -> StateT m a
     lift ma = StateT $ \s -> do
             a <- ma
@@ -184,11 +184,11 @@ instance Monad m => Applicative (ReaderT r m) where
         f' <- runReaderT f r
         n' <- runReaderT n r
         pure $ f' n'
-                                
+
 instance Monad m => Monad (ReaderT r m) where
     return = pure
 
-    n >>= f = ReaderT $ \r -> do 
+    n >>= f = ReaderT $ \r -> do
         n' <- runReaderT n r
         runReaderT (f n') r
 
@@ -197,21 +197,21 @@ instance MonadTrans (ReaderT r) where
     -- lift = ReaderT . const
     lift m = ReaderT $ \_ -> m
 
-asks :: Monad m => 
-    (r -> r') -> 
+asks :: Monad m =>
+    (r -> r') ->
     ReaderT r m r'
 asks f = ReaderT (\r -> pure (f r))
 
 ask :: Monad m => ReaderT r m r
 ask = asks Prelude.id
 
-local :: 
+local ::
     -- to modify local env
-    (r -> r) -> 
+    (r -> r) ->
     -- to run with modified env
     ReaderT r m a ->
     -- regular env..
-    ReaderT r m a 
+    ReaderT r m a
 local f (ReaderT g) = ReaderT $
     \r -> g (f r)
 
@@ -235,7 +235,7 @@ type Sub = [(String, Term)]
 -- [("a", Var "b"), ("b", Op "f" [])]
 -- then can use the lookup function to get the corresponding term corresponding to a variable
 
--- why we want these partial functions? 
+-- why we want these partial functions?
 -- we would like to apply these to terms: we want to replace ALL variables in a term (that corresponds to a substitution) with its corresponding term (just beta reduction substitution)
 applySub:: Sub -> Term -> Term
 applySub sub term = f term
@@ -251,17 +251,17 @@ applySub sub term = f term
 -- give f, g, gives g \circ f
 -- tau `comp` sigma
 comp:: Sub -> Sub -> Sub
-comp tau sigma = 
+comp tau sigma =
     [(v, applySub tau t) | (v,t) <- sigma]
     ++
     [(v,t) | (v,t) <- tau, v `notElem` map fst sigma]
-    
+
 --       list of constraints
 unify :: [(Term, Term)] -> Sub
 unify [] = []
 unify ((a,b):cs) | a == b = unify cs --trivial case: identical terms, no need substitute
 unify (c:cs) = case c of
-    (Var x, y) | x `notElem` freeVars y -> 
+    (Var x, y) | x `notElem` freeVars y ->
             --why do we substitute cs before recurse?
             --we also want to eliminate x in further substitutions (needed for termination)
             --you are decreasing the nvars
@@ -275,7 +275,7 @@ unify (c:cs) = case c of
             | otherwise -> error "occurs check"
 
     --symmetric
-    (x', Var y') | y' `notElem` freeVars x' -> 
+    (x', Var y') | y' `notElem` freeVars x' ->
             let x = y'
                 y = x'
             in unify [ (applySub [(x,y)] l, applySub [(x,y)] r)| (l,r) <- cs] `comp` [(x,y)]
@@ -312,7 +312,7 @@ type Uniq = Int
 -- put reader inside state doesn't really work (without GHC extensions ... )
 -- type TypeInfer a = StateT Uniq (Reader (Uniq, [(String, Uniq)])) a
 
--- for the stack and the recursion, we need to input 
+-- for the stack and the recursion, we need to input
 -- (Uniq, [(String, Uniq)])
 -- ^^         ^^ stack to look up the variables
 -- current typeid of tree
@@ -324,12 +324,12 @@ type TypeInfer a = ReaderT (Uniq, [(String, Uniq)]) (StateT Uniq (Either String)
 state :: Monad m => (s -> m (a,s)) -> StateT s m a
 state f = StateT f
 
--- idea: when entering the recursion, use "ask" to get the current type id of the tree 
+-- idea: when entering the recursion, use "ask" to get the current type id of the tree
 -- then use state monad to get fresh var id (need to lift)
 -- then use local to recurse with a different type id and a potentially different stack
 
 runTypeInfer :: Lam -> Either String Term
-runTypeInfer lam = 
+runTypeInfer lam =
     do -- in either monad
         -- you can say: the root typeid is "0", and of course we start with the empty stack
         -- then, since the root is type "0", you probably want to start the fresh id at "1"
@@ -342,7 +342,7 @@ runTypeInfer lam =
 
 --collect the constraints for unification
 typeInfer :: Lam -> TypeInfer [(Term, Term)]
-typeInfer (LVar v) = 
+typeInfer (LVar v) =
     do
       (mytype, env) <- ask
       case lookup v env of
@@ -365,8 +365,8 @@ typeInfer (LApp l r) =
       lconstraints <- local (\(_, env) -> (ltype, env)) $ typeInfer l
       rconstraints <- local (\(_, env) -> (rtype, env)) $ typeInfer r
 
-      return $ [(Var $ show ltype,  
-                Op "->" [ Var $ show rtype, Var $ show mytype])] 
+      return $ [(Var $ show ltype,
+                Op "->" [ Var $ show rtype, Var $ show mytype])]
              ++ lconstraints ++ rconstraints
 -- (\x . body) :: \alpha
 -- x :: \beta
@@ -380,13 +380,13 @@ typeInfer (LAbs x body) =
       xtype <- lift $ state (\freshid -> Right $ (freshid, freshid+1))
       bodytype <- lift $ state (\freshid -> Right $ (freshid, freshid+1))
 
-      -- when recurisng to the body, set the expected typeid to "bodytype", 
+      -- when recurisng to the body, set the expected typeid to "bodytype",
       -- also we need to push the type of "x" to the stack
       -- so do "(x, xtype) :env"
       bodyconstraints <- local (\(_, env) -> (bodytype, (x, xtype) :env)) $ typeInfer body
 
       return $ [(Var $ show mytype,
-                Op "->" [ Var $ show xtype, Var $ show bodytype])] 
+                Op "->" [ Var $ show xtype, Var $ show bodytype])]
              ++ bodyconstraints
 
 --examples?
