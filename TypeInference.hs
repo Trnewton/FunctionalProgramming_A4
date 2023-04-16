@@ -3,6 +3,7 @@ module TypeInference where
 import Lib.Monads
 import Lib.AST
 import GHC.Base (undefined)
+import Debug.Trace
 
 -- | autoGraderTypeInference
 -- You should implement this function! This function should take a LambdaTerm
@@ -14,12 +15,13 @@ import GHC.Base (undefined)
 autoGraderTypeInference :: LambdaTerm -> Either String LambdaTyTerm
 autoGraderTypeInference t = Right (snd (head sEqs))
     where
-        eqs = case runGetTypeEqns t of
-                Left msg    -> error msg
-                Right eqs'   -> eqs
+        eqs = unwrapTyEqs (runGetTypeEqns t)
         (fv, bv, sEqs) = solveTypeEqns eqs
 
-
+unwrapTyEqs :: Either String LambdaTypeEqns -> LambdaTypeEqns
+unwrapTyEqs ts = case ts of
+        Left err    -> error err
+        Right t     -> t
 
 ------------------------------------------------------------------------------------------
 --  Data Structures
@@ -178,6 +180,10 @@ getTypeEqns tyQ (LCase t t0 (v, t1)) = do
 union :: (Eq a) => [a] -> [a] -> [a]
 union xs ys = xs ++ filter (`notElem` xs) ys
 
+-- | Takes the set difference of first list minus the second.
+diff :: (Eq a) => [a] -> [a] -> [a]
+diff xs ys = filter (`notElem` ys) xs
+
 remove :: (Eq a) => a -> [a] -> [a]
 remove element = filter (/= element)
 
@@ -189,7 +195,7 @@ match (TyProduct () x1 x2) (TyProduct () y1 y2) = match x1 y1 ++ match x2 y2
 match (TyNat ()) (TyNat ()) = []
 match (TyUnit ()) (TyUnit ()) = []
 match (TyList () x) (TyList () y) = match x y
-match _ _ = error "Matching failed"
+match x y = error ("Matching failed: " ++ lambdaTyPrettyShow x ++ ", " ++ lambdaTyPrettyShow y)
 
 free :: LambdaTyTerm -> [String]
 free (TyVar () v) = [v]
@@ -221,6 +227,14 @@ subVar (v, t) (TyNat ()) = TyNat ()
 subVar (v, t) (TyUnit ()) = TyNat ()
 subVar (v, t) (TyList () x) = TyList () (subVar (v, t) x)
 
+-- TODO: Need to account for possible introduction of new assignment that allows for bv erradication
+process :: ([String], [Assignment]) -> ([String], [Assignment])
+process ([], subs) = ([], subs)
+process (v:bv, subs) = case findAssign v subs of
+    Nothing     -> let (bv', subs') = process (bv, subs) in (v:bv', subs')
+    Just sub    -> let (bv', subs') = process (bv, appSubs sub subs) in (v:bv', subs')
+
+
 solveTypeEqns :: LambdaTypeEqns -> LambdaSolvedTyEqs
 solveTypeEqns eqs = (fvOut,bvOut,subsOut)
     where
@@ -230,9 +244,14 @@ solveTypeEqns eqs = (fvOut,bvOut,subsOut)
 solveTypeEqns' :: LambdaTypeEqns -> LambdaSolvedTyEqs
 solveTypeEqns' (TypeExist [] []) = ([], [], [])
 solveTypeEqns' (TypeEqn (t1, t2)) = (free t1 ++ free t2, [], match t1 t2)
-solveTypeEqns' (TypeExist nbv eqs) = process (foldr collect ([], nbv', []) eqs)
+solveTypeEqns' (TypeExist nbv eqs) = (fvOut, bvOut, subsOut)
     where
         nbv' = map (\(TyVar () v) -> v) nbv
+        (fv, bv, subs) = foldr collect ([], nbv', []) eqs
+        -- Remove newly bound variables from free
+        fvOut = diff fv bv
+        -- Do subsitutions that we can
+        (bvOut, subsOut) = process (bv, subs)
 
 collect :: LambdaTypeEqns -> LambdaSolvedTyEqs -> LambdaSolvedTyEqs
 collect eqs (fv, bv, subs) = (fvOut, bvOut, subsOut)
@@ -242,10 +261,3 @@ collect eqs (fv, bv, subs) = (fvOut, bvOut, subsOut)
         fvOut = fv `union` fv'
         bvOut = bv `union` bv'
         subsOut = subs ++ subs'
-
--- TODO: Need to account for possible introduction of new assignment that allows for bv erradication
-process :: LambdaSolvedTyEqs -> LambdaSolvedTyEqs
-process (fv, [], subs) = (fv, [], subs)
-process (fv, v:bv, subs) = case findAssign v subs of
-    Nothing     -> let (fv', bv', subs') = process (remove v fv, bv, subs) in (fv', v:bv', subs')
-    Just sub    -> let (fv', bv', subs') = process (remove v fv, bv, appSubs sub subs) in (fv', v:bv', subs')
