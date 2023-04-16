@@ -18,11 +18,11 @@ unwrapTyEqs ts = case ts of
         Right t     -> t
 
 test1 = Abs "x" (Var "x")
-tyeq1 = unwrapTyEqs $ runTypeInference test1
+tyeq1 = unwrapTyEqs $ runGetTypeEqns test1
 
 test2 :: Term [Char] [Char]
 test2 = App test1 test1
-tyeq2 = unwrapTyEqs $ runTypeInference test2
+tyeq2 = unwrapTyEqs $ runGetTypeEqns test2
 
 test3 = Abs "x" (PCase (Var "x") (("x","y"), Pair (Var "y") (Var "x")))
-tyeq3 = unwrapTyEqs $ runTypeInference test3
+tyeq3 = unwrapTyEqs $ runGetTypeEqns test3
